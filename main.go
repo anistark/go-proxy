@@ -8,6 +8,7 @@ import (
 )
 
 var rpcURL = "http://localhost:16534"
+var explorerURL = "http://localhost:3000"
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +16,6 @@ func corsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS") // Allow all methods
 		w.Header().Set("Access-Control-Allow-Headers", "*")                               // Allow all headers
 
-		// If it's a preflight request, return immediately
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -25,8 +25,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func handleProxy(w http.ResponseWriter, r *http.Request) {
-	// Read request body
+func handleRPCProxy(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request", http.StatusInternalServerError)
@@ -34,7 +33,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Forward request to the actual RPC
 	resp, err := http.Post(rpcURL, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		http.Error(w, "Failed to connect to RPC", http.StatusBadGateway)
@@ -42,7 +40,26 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Copy response back to client
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func handleExplorerProxy(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request", http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+
+	resp, err := http.Post(explorerURL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		http.Error(w, "Failed to connect to RPC", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
@@ -50,9 +67,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/proxy", handleProxy) // Single endpoint for the proxy
+	mux.HandleFunc("/rpc", handleRPCProxy)
+	mux.HandleFunc("/explorer", handleExplorerProxy)
 
-	// Wrap with CORS middleware
 	handler := corsMiddleware(mux)
 
 	fmt.Println("RPC Proxy running on port 1992...")
