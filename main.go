@@ -7,8 +7,8 @@ import (
 	"net/http"
 )
 
-var rpcURL = "http://localhost:16534"
-var explorerURL = "http://localhost:3000"
+var rpcURL = "http://localhost:16580"
+var explorerURL = "http://blockchain.nidumai:3000"
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
